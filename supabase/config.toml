@@ -1,1 +1,19 @@
 project_id = "ughbfcmwkojnrwemypqr"
+
+[functions.mercadopago-checkout]
+verify_jwt = false
+
+[functions.webhook]
+verify_jwt = false
+
+[functions.generate-ad]
+verify_jwt = true
+
+[functions.test-webhook]
+verify_jwt = true
+
+[functions.test-mp-token]
+verify_jwt = false
+
+[functions.health]
+verify_jwt = false

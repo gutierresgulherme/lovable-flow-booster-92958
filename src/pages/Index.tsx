@@ -24,7 +24,11 @@ const Index = () => {
       console.log("🚀 Criando checkout Mercado Pago para:", email);
 
       const { data, error } = await supabase.functions.invoke("mercadopago-checkout", {
-        body: { email, amount: 37.9 },
+        body: { 
+          email, 
+          amount: 37.9,
+          origin: window.location.origin
+        },
       });
 
       if (error) {
