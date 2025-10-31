@@ -122,7 +122,7 @@ const Create = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await supabase.from("ads").insert({
+      const { error } = await (supabase as any).from("ads").insert({
         user_id: user.id,
         title: productName,
         description: generatedDescription,

@@ -46,7 +46,7 @@ const WebhookSettings = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("webhook_settings")
       .select("*")
       .eq("user_id", user.id)
@@ -68,7 +68,7 @@ const WebhookSettings = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("webhook_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -103,7 +103,7 @@ const WebhookSettings = () => {
       if (!user) throw new Error("Usuário não autenticado");
 
       if (hasSettings) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("webhook_settings")
           .update({
             webhook_url: webhookUrl,
@@ -113,7 +113,7 @@ const WebhookSettings = () => {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("webhook_settings")
           .insert({
             user_id: user.id,

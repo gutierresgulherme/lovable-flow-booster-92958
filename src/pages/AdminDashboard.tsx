@@ -34,7 +34,7 @@ const AdminDashboard = () => {
       }
 
       // Check if user is admin
-      const { data: roles } = await supabase
+      const { data: roles } = await (supabase as any)
         .from("user_roles")
         .select("role")
         .eq("user_id", session.user.id);
@@ -48,11 +48,11 @@ const AdminDashboard = () => {
       }
 
       // Load admin data
-      const { data: adsData } = await supabase
+      const { data: adsData } = await (supabase as any)
         .from("ads")
         .select("id");
       
-      const { data: paymentsData } = await supabase
+      const { data: paymentsData } = await (supabase as any)
         .from("payments")
         .select("id");
 

@@ -36,7 +36,7 @@ const Dashboard = () => {
       }
 
       // Check if user is admin
-      const { data: roles } = await supabase
+      const { data: roles } = await (supabase as any)
         .from("user_roles")
         .select("role")
         .eq("user_id", session.user.id);
@@ -45,7 +45,7 @@ const Dashboard = () => {
       setIsAdmin(hasAdminRole || false);
 
       // Load user's ads
-      const { data: adsData, error } = await supabase
+      const { data: adsData, error } = await (supabase as any)
         .from("ads")
         .select("*")
         .eq("user_id", session.user.id)
