@@ -6,31 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, Sparkles, ArrowLeft, Calculator } from "lucide-react";
+import { Loader2, Sparkles, ArrowLeft, Save, Copy, Image, Video } from "lucide-react";
 
 const Create = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Campos do produto
+  // Product fields
   const [productName, setProductName] = useState("");
-  const [productCost, setProductCost] = useState("");
-  const [taxRate, setTaxRate] = useState("");
-  const [desiredMargin, setDesiredMargin] = useState("");
+  const [shortDescription, setShortDescription] = useState("");
+  const [category, setCategory] = useState("");
 
-  // Taxas Shopee
-  const [freeShipping, setFreeShipping] = useState("no");
-  const [fixedFee, setFixedFee] = useState("high");
-
-  // IA fields
-  const [keywords, setKeywords] = useState("");
-  const [targetAudience, setTargetAudience] = useState("");
+  // Generated content
+  const [generatedTitle, setGeneratedTitle] = useState("");
   const [generatedDescription, setGeneratedDescription] = useState("");
-
-  // Cálculo do preço final
-  const [finalPrice, setFinalPrice] = useState(0);
+  const [generatedTags, setGeneratedTags] = useState<string[]>([]);
+  const [basePrice, setBasePrice] = useState<number | null>(null);
+  const [priceJustification, setPriceJustification] = useState("");
+  const [imagePrompts, setImagePrompts] = useState<string[]>([]);
+  const [videoPrompts, setVideoPrompts] = useState<string[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -42,103 +38,78 @@ const Create = () => {
     checkAuth();
   }, [navigate]);
 
-  // Cálculo automático do preço final
-  useEffect(() => {
-    if (!productCost || !taxRate || !desiredMargin) {
-      setFinalPrice(0);
-      return;
-    }
-
-    const cost = parseFloat(productCost);
-    const tax = parseFloat(taxRate);
-    const margin = parseFloat(desiredMargin);
-    const commission = freeShipping === "yes" ? 20 : 14;
-    const fixed = fixedFee === "low" ? 2 : 4;
-
-    const calculatedPrice = cost + (cost * margin / 100) + fixed + (cost * commission / 100) + (cost * tax / 100);
-    setFinalPrice(calculatedPrice);
-  }, [productCost, taxRate, desiredMargin, freeShipping, fixedFee]);
-
-  const handleClear = () => {
-    setProductName("");
-    setProductCost("");
-    setTaxRate("");
-    setDesiredMargin("");
-    setFreeShipping("no");
-    setFixedFee("high");
-    setKeywords("");
-    setTargetAudience("");
-    setGeneratedDescription("");
-    setFinalPrice(0);
-    toast.info("Campos limpos com sucesso!");
-  };
-
-  const handleGenerateAd = () => {
-    if (!productName.trim()) {
-      toast.error("Preencha o nome do produto");
-      return;
-    }
-    if (finalPrice === 0) {
-      toast.error("Preencha todos os campos obrigatórios para calcular o preço");
-      return;
-    }
-    toast.success("Anúncio gerado com sucesso!");
-  };
-
   const handleGenerate = async () => {
     if (!productName.trim()) {
-      toast.error("Adicione o nome do produto");
+      toast.error("Digite o nome do produto");
       return;
     }
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-ad", {
+      const { data, error } = await supabase.functions.invoke("generate-product", {
         body: {
-          title: productName,
-          keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
-          targetAudience,
+          productName,
+          description: shortDescription,
+          category,
         },
       });
 
       if (error) throw error;
+
+      setGeneratedTitle(data.title);
       setGeneratedDescription(data.description);
-      toast.success("Descrição gerada com sucesso!");
+      setGeneratedTags(data.tags || []);
+      setBasePrice(data.basePrice || null);
+      setPriceJustification(data.priceJustification || "");
+      setImagePrompts(data.imagePrompts || []);
+      setVideoPrompts(data.videoPrompts || []);
+
+      toast.success("✅ Conteúdo gerado com sucesso!");
     } catch (error: any) {
-      toast.error(error.message || "Erro ao gerar descrição");
+      console.error("Error generating product:", error);
+      toast.error(error.message || "Erro ao gerar conteúdo");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!productName.trim() || !generatedDescription.trim()) {
-      toast.error("Nome do produto e descrição são obrigatórios");
+    if (!generatedTitle || !generatedDescription) {
+      toast.error("Gere o conteúdo antes de salvar");
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await (supabase as any).from("ads").insert({
+      const { error } = await (supabase as any).from("products").insert({
         user_id: user.id,
-        title: productName,
+        title: generatedTitle,
         description: generatedDescription,
-        keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
-        target_audience: targetAudience,
-        status: "published",
+        category: category || null,
+        tags: generatedTags,
+        image_prompts: imagePrompts,
+        video_prompts: videoPrompts,
+        base_price: basePrice,
       });
 
       if (error) throw error;
-      toast.success("Anúncio salvo com sucesso!");
+      
+      toast.success("✅ Produto salvo no Dashboard com sucesso!");
       navigate("/dashboard");
     } catch (error: any) {
-      toast.error(error.message || "Erro ao salvar anúncio");
+      console.error("Error saving product:", error);
+      toast.error(error.message || "Erro ao salvar produto");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("✅ Prompt copiado!");
   };
 
   return (
@@ -153,259 +124,193 @@ const Create = () => {
           Voltar
         </Button>
 
-        <Card className="border-primary/30 backdrop-blur-sm bg-card/90 shadow-[0_0_30px_rgba(251,146,60,0.15)]">
+        <Card className="border-primary/30 backdrop-blur-sm bg-card/90">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <Calculator className="h-8 w-8 text-primary" />
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-8 w-8 text-primary" />
               <div>
-                <CardTitle className="text-2xl sm:text-3xl">Calculadora de Preços Shopee</CardTitle>
-                <CardDescription className="text-sm sm:text-base">
-                  Calcule o preço ideal considerando custos, impostos e taxas da plataforma
+                <CardTitle className="text-2xl sm:text-3xl">Criar Produto com IA</CardTitle>
+                <CardDescription>
+                  Gere conteúdo profissional para seu produto usando ChatGPT
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Grid de campos principais */}
-            <div className="grid grid-cols-1 gap-6">
-              {/* Nome do Produto */}
-              <Card className="border-border/50 bg-muted/30">
-                <CardContent className="pt-6 space-y-2">
-                  <Label htmlFor="productName" className="text-base sm:text-sm">
-                    Nome do Produto <span className="text-primary">*</span>
-                  </Label>
-                  <Input
-                    id="productName"
-                    placeholder="Ex: Fone de Ouvido Bluetooth TWS"
-                    value={productName}
-                    onChange={(e) => setProductName(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Custo do Produto */}
-              <Card className="border-border/50 bg-muted/30">
-                <CardContent className="pt-6 space-y-2">
-                  <Label htmlFor="productCost" className="text-base sm:text-sm">
-                    Custo do Produto (R$) <span className="text-primary">*</span>
-                  </Label>
-                  <Input
-                    id="productCost"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={productCost}
-                    onChange={(e) => setProductCost(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Alíquota de Imposto */}
-              <Card className="border-border/50 bg-muted/30">
-                <CardContent className="pt-6 space-y-2">
-                  <Label htmlFor="taxRate" className="text-base sm:text-sm">
-                    Alíquota de Imposto (%) <span className="text-primary">*</span>
-                  </Label>
-                  <Input
-                    id="taxRate"
-                    type="number"
-                    step="0.01"
-                    placeholder="0"
-                    value={taxRate}
-                    onChange={(e) => setTaxRate(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Margem Desejada */}
-              <Card className="border-border/50 bg-muted/30">
-                <CardContent className="pt-6 space-y-2">
-                  <Label htmlFor="desiredMargin" className="text-base sm:text-sm">
-                    Margem Desejada (%) <span className="text-primary">*</span>
-                  </Label>
-                  <Input
-                    id="desiredMargin"
-                    type="number"
-                    step="0.01"
-                    placeholder="0"
-                    value={desiredMargin}
-                    onChange={(e) => setDesiredMargin(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
-                  />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Wrappers de Taxas Shopee */}
-            <div className="space-y-6 pt-4">
-              {/* Programa de Frete Grátis */}
-              <Card className="border-secondary/30 bg-card shadow-[0_0_20px_rgba(6,182,212,0.1)]">
-                <CardContent className="pt-6 space-y-4">
-                  <Label className="text-base sm:text-lg font-semibold text-secondary">
-                    Programa de Frete Grátis Shopee
-                  </Label>
-                  <RadioGroup value={freeShipping} onValueChange={setFreeShipping}>
-                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <RadioGroupItem value="yes" id="shipping-yes" />
-                      <Label htmlFor="shipping-yes" className="cursor-pointer flex-1">
-                        Sim (20% de comissão)
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <RadioGroupItem value="no" id="shipping-no" />
-                      <Label htmlFor="shipping-no" className="cursor-pointer flex-1">
-                        Não (14% de comissão)
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-
-              {/* Taxa Fixa Shopee */}
-              <Card className="border-secondary/30 bg-card shadow-[0_0_20px_rgba(6,182,212,0.1)]">
-                <CardContent className="pt-6 space-y-4">
-                  <Label className="text-base sm:text-lg font-semibold text-secondary">
-                    Selecione o tipo de taxa fixa Shopee
-                  </Label>
-                  <RadioGroup value={fixedFee} onValueChange={setFixedFee}>
-                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <RadioGroupItem value="low" id="fee-low" />
-                      <Label htmlFor="fee-low" className="cursor-pointer flex-1">
-                        Produto menor que R$8 → Taxa Fixa de R$2
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <RadioGroupItem value="high" id="fee-high" />
-                      <Label htmlFor="fee-high" className="cursor-pointer flex-1">
-                        Produto maior que R$8 → Taxa Fixa de R$4
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Resultado do Cálculo */}
-            {finalPrice > 0 && (
-              <Card className="border-primary/50 bg-gradient-to-br from-primary/10 to-secondary/10 shadow-[0_0_40px_rgba(251,146,60,0.2)]">
-                <CardContent className="pt-6">
-                  <div className="text-center space-y-2">
-                    <p className="text-base sm:text-lg text-muted-foreground">💰 Preço de Venda Sugerido</p>
-                    <p className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text">
-                      R$ {finalPrice.toFixed(2)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Botões Finais */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button
-                onClick={handleClear}
-                variant="outline"
-                className="w-full py-3 border-border/50 hover:border-primary/50"
-              >
-                Limpar
-              </Button>
-              <Button
-                onClick={handleGenerateAd}
-                disabled={!productName.trim() || finalPrice === 0}
-                className="w-full py-3 bg-gradient-primary hover:opacity-90 transition-opacity"
-              >
-                Gerar Anúncio
-              </Button>
-            </div>
-
-            {/* Seção de Geração de Descrição com IA */}
-            <div className="pt-6 border-t border-border/50 space-y-4">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-6 w-6 text-primary" />
-                <h3 className="text-lg sm:text-xl font-semibold">Gerar Descrição com IA (Opcional)</h3>
+            {/* Input Fields */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="productName">
+                  Nome do Produto <span className="text-primary">*</span>
+                </Label>
+                <Input
+                  id="productName"
+                  placeholder="Ex: Fone de Ouvido Bluetooth TWS"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  className="w-full"
+                />
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="shortDescription">Descrição Curta</Label>
+                <Textarea
+                  id="shortDescription"
+                  placeholder="Breve descrição do produto..."
+                  value={shortDescription}
+                  onChange={(e) => setShortDescription(e.target.value)}
+                  rows={3}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria (opcional)</Label>
+                <Input
+                  id="category"
+                  placeholder="Ex: Eletrônicos, Casa, Moda..."
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            <Button
+              onClick={handleGenerate}
+              disabled={isLoading || !productName.trim()}
+              className="w-full py-3"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Sparkles className="mr-2 h-4 w-4" />
+              Gerar Conteúdo com IA
+            </Button>
+
+            {/* Generated Content */}
+            {generatedTitle && (
+              <div className="space-y-6 pt-6 border-t">
                 <div className="space-y-2">
-                  <Label htmlFor="keywords">Palavras-chave (separadas por vírgula)</Label>
+                  <Label>Título Otimizado</Label>
                   <Input
-                    id="keywords"
-                    placeholder="Ex: bluetooth, cancelamento de ruído, TWS"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
+                    value={generatedTitle}
+                    onChange={(e) => setGeneratedTitle(e.target.value)}
+                    className="font-semibold"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="audience">Público-alvo</Label>
-                  <Input
-                    id="audience"
-                    placeholder="Ex: Jovens de 18-30 anos, gamers"
-                    value={targetAudience}
-                    onChange={(e) => setTargetAudience(e.target.value)}
-                    className="w-full bg-background border-primary/20 focus:border-primary text-base sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <Button
-                onClick={handleGenerate}
-                disabled={isLoading || !productName}
-                className="w-full py-3 bg-gradient-primary hover:opacity-90 transition-opacity"
-              >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Sparkles className="mr-2 h-4 w-4" />
-                Gerar Descrição com IA
-              </Button>
-
-              {generatedDescription && (
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição Gerada</Label>
+                  <Label>Descrição Persuasiva</Label>
                   <Textarea
-                    id="description"
                     value={generatedDescription}
                     onChange={(e) => setGeneratedDescription(e.target.value)}
-                    rows={8}
-                    className="font-mono text-sm bg-background border-primary/20"
+                    rows={6}
+                    className="text-sm"
                   />
-                  <Button
-                    onClick={handleSave}
-                    disabled={isLoading}
-                    variant="secondary"
-                    className="w-full py-3"
-                  >
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Salvar Anúncio
-                  </Button>
                 </div>
-              )}
-            </div>
+
+                <div className="space-y-2">
+                  <Label>Tags/Categorias</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {generatedTags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {basePrice && (
+                  <div className="space-y-2">
+                    <Label>Preço Base Sugerido</Label>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-2xl font-bold text-primary">
+                        R$ {basePrice.toFixed(2)}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {priceJustification}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Image Prompts */}
+                {imagePrompts.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Image className="h-5 w-5 text-secondary" />
+                      <Label className="text-lg">🧠 Gere suas imagens no Runway.ai</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Copie um dos prompts abaixo e cole no Runway.ai:
+                    </p>
+                    <div className="space-y-2">
+                      {imagePrompts.map((prompt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <p className="flex-1 text-sm">{prompt}</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(prompt)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Video Prompts */}
+                {videoPrompts.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Video className="h-5 w-5 text-secondary" />
+                      <Label className="text-lg">🎬 Crie seus vídeos no Runway.ai</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Cole um dos prompts abaixo no Runway.ai:
+                    </p>
+                    <div className="space-y-2">
+                      {videoPrompts.map((prompt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <p className="flex-1 text-sm">{prompt}</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(prompt)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="w-full py-3"
+                  variant="secondary"
+                >
+                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Save className="mr-2 h-4 w-4" />
+                  Salvar no Dashboard
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Resumo fixo no rodapé mobile */}
-      {finalPrice > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 sm:hidden">
-          <div 
-            className="p-4 flex items-center justify-between"
-            style={{
-              position: 'sticky',
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.85)',
-              backdropFilter: 'blur(6px)',
-            }}
-          >
-            <span className="text-sm text-muted-foreground">Preço Sugerido:</span>
-            <span className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              R$ {finalPrice.toFixed(2)}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, LogOut, Sparkles, TrendingUp, ShoppingBag, Crown, Settings } from "lucide-react";
+import { Plus, LogOut, Sparkles, TrendingUp, ShoppingBag, Crown, Settings, Package, Trash2 } from "lucide-react";
 
 interface Ad {
   id: string;
@@ -16,9 +16,20 @@ interface Ad {
   created_at: string;
 }
 
+interface Product {
+  id: string;
+  title: string;
+  description: string;
+  category: string | null;
+  tags: string[];
+  base_price: number | null;
+  created_at: string;
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [ads, setAds] = useState<Ad[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -54,11 +65,37 @@ const Dashboard = () => {
       if (error) throw error;
 
       setAds(adsData || []);
+
+      // Load user's products
+      const { data: productsData } = await (supabase as any)
+        .from("products")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+
+      setProducts(productsData || []);
     } catch (error: any) {
       console.error("Erro ao carregar dados:", error);
-      toast.error("Erro ao carregar seus anúncios");
+      toast.error("Erro ao carregar seus dados");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from("products")
+        .delete()
+        .eq("id", productId);
+
+      if (error) throw error;
+
+      setProducts(products.filter((p) => p.id !== productId));
+      toast.success("Produto excluído com sucesso!");
+    } catch (error: any) {
+      console.error("Error deleting product:", error);
+      toast.error("Erro ao excluir produto");
     }
   };
 
@@ -158,15 +195,18 @@ const Dashboard = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Seus Anúncios</CardTitle>
-                <CardDescription>Gerencie todos os seus anúncios</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Meus Produtos ({products.length})
+                </CardTitle>
+                <CardDescription>Produtos criados com IA</CardDescription>
               </div>
               <Button
                 onClick={() => navigate("/create")}
                 className="bg-gradient-primary hover:opacity-90"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Novo Anúncio
+                Criar Produto
               </Button>
             </div>
           </CardHeader>
@@ -175,19 +215,88 @@ const Dashboard = () => {
               <div className="text-center py-12 text-muted-foreground">
                 Carregando...
               </div>
-            ) : ads.length === 0 ? (
+            ) : products.length === 0 ? (
               <div className="text-center py-12">
-                <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground mb-4">
-                  Você ainda não criou nenhum anúncio
+                  Você ainda não criou nenhum produto
                 </p>
                 <Button
                   onClick={() => navigate("/create")}
                   className="bg-gradient-primary hover:opacity-90"
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Criar Primeiro Anúncio
+                  Criar Primeiro Produto
                 </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {products.map((product) => (
+                  <Card key={product.id} className="border-border/50">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <h3 className="font-semibold text-lg">{product.title}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {product.description}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {product.category && (
+                              <Badge variant="secondary">{product.category}</Badge>
+                            )}
+                            {product.tags?.slice(0, 3).map((tag, idx) => (
+                              <Badge key={idx} variant="outline">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span>
+                              {new Date(product.created_at).toLocaleDateString("pt-BR")}
+                            </span>
+                            {product.base_price && (
+                              <span className="font-semibold text-primary">
+                                R$ {product.base_price.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-secondary/30 bg-card/90 backdrop-blur-sm">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Seus Anúncios</CardTitle>
+                <CardDescription>Anúncios criados anteriormente</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Carregando...
+              </div>
+            ) : ads.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  Nenhum anúncio criado ainda
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
